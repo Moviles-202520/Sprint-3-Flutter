@@ -38,6 +38,10 @@ dependencies:
   uuid: ^3.0.7
   http: ^0.13.6
   geolocator: ^9.0.2
+  # Nuevas dependencias para obtener puntos máximos
+  sqflite: ^2.3.0              # BD relacional (10 puntos)
+  cached_network_image: ^3.3.0 # Cache de imágenes (5 puntos)
+  path: ^1.8.3                 # Para archivos locales (5 puntos)
   flutter:
     sdk: flutter
   # The following adds the Cupertino Icons font to your application.
