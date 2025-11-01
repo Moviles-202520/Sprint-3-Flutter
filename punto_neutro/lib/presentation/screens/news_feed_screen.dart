@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:punto_neutro/presentation/viewmodels/auth_view_model.dart';
 import 'package:punto_neutro/core/analytics_service.dart';
 // repository imports are specific to providers
@@ -204,6 +205,12 @@ class _NewsFeedScreenState extends State<NewsFeedScreen> {
             // Do NOT record the session-category relation here — that should
             // only be recorded when the user clicks into the detail screen.
             AnalyticsService().incrementArticlesViewed(news.news_item_id);
+            
+            // Prefetch cuando estamos cerca del final (últimas 3 noticias)
+            final threshold = 3;
+            if (index >= viewModel.newsItems.length - threshold) {
+              viewModel.prefetchNextImages(index, 5, context);
+            }
           },
           itemBuilder: (context, index) {
             final news = viewModel.newsItems[index];
@@ -266,10 +273,19 @@ class _NewsItemCard extends StatelessWidget {
   Widget _buildBackground() {
     return Positioned.fill(
       child: news.image_url.isNotEmpty
-          ? Image.network(
-              news.image_url,
+          ? CachedNetworkImage(
+              imageUrl: news.image_url,
               fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
+              placeholder: (context, url) => Container(
+                color: Colors.grey.shade900,
+                child: const Center(
+                  child: CircularProgressIndicator(
+                    color: Colors.white24,
+                    strokeWidth: 2,
+                  ),
+                ),
+              ),
+              errorWidget: (context, url, error) {
                 return Container(color: Colors.grey.shade800);
               },
             )
