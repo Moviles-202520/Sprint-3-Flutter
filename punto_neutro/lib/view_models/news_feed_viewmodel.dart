@@ -5,6 +5,7 @@ import '../domain/models/news_item.dart';
 
 class NewsFeedViewModel extends ChangeNotifier {
   final NewsRepository _repository;
+  
   List<NewsItem> _allNewsItems = [];
   List<NewsItem> _filteredNewsItems = [];
   bool _isLoading = true;
