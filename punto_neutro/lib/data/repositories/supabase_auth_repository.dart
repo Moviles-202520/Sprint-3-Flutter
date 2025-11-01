@@ -131,4 +131,16 @@ class SupabaseAuthRepository implements AuthRepository {
     // Por ahora solo limpiamos la sesión local
     await _supabase.auth.signOut();
   }
+
+  @override
+  Future<int?> currentUserProfileId() async {
+    final uid = _supabase.auth.currentUser?.id;
+    if (uid == null) return null;
+    final res = await _supabase
+        .from('user_profiles')
+        .select('user_profile_id')
+        .eq('user_auth_id', uid)
+        .maybeSingle();
+    return res == null ? null : (res['user_profile_id'] as num).toInt();
+  }
 }

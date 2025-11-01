@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:punto_neutro/presentation/screens/PuntoNeutroApp.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+
+import 'core/image_cache_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Inicializar Hive y abrir cajas necesarias para cache offline
@@ -11,6 +13,7 @@ void main() async {
     await Hive.openBox<dynamic>('news_cache');
     await Hive.openBox<dynamic>('comments_cache');
     await Hive.openBox<dynamic>('ratings_cache');
+    await ImageCacheService.ensureBoxOpened();
     // Las "pending" se almacenan como keys dentro de las cajas de comments/ratings
     print('✅ Hive inicializado y cajas abiertas');
   } catch (e, st) {

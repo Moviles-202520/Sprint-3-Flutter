@@ -1,6 +1,9 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 
 /// ✅ DART:IO FILE MANAGEMENT (5 puntos según rúbrica)
@@ -360,5 +363,65 @@ class LocalFileService {
     // Mostrar estadísticas
     final stats = await getStorageStatistics();
     print('📊 Estadísticas de almacenamiento: ${stats['total_size_mb']} MB');
+  }
+
+  static final LocalFileService instance = LocalFileService._();
+  LocalFileService._();
+
+  Future<Directory> _ensureCacheDir() async {
+    if (_cacheDir != null) return _cacheDir!;
+    final base = await getTemporaryDirectory();
+    final dir = Directory('${base.path}/img_cache');
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    _cacheDir = dir;
+    return dir;
+  }
+
+  Future<File> fileForName(String name) async {
+    final dir = await _ensureCacheDir();
+    return File('${dir.path}/$name');
+  }
+
+  Future<bool> exists(String name) async {
+    final f = await fileForName(name);
+    return f.exists();
+  }
+
+  Future<File> writeBytes(String name, Uint8List bytes) async {
+    final f = await fileForName(name);
+    return f.writeAsBytes(bytes, flush: true);
+  }
+
+  Future<Uint8List?> readBytes(String name) async {
+    final f = await fileForName(name);
+    if (!await f.exists()) return null;
+    return await f.readAsBytes();
+  }
+
+  Future<int> sizeBytes(String name) async {
+    final f = await fileForName(name);
+    if (!await f.exists()) return 0;
+    return (await f.length());
+  }
+
+  Future<void> delete(String name) async {
+    final f = await fileForName(name);
+    if (await f.exists()) {
+      await f.delete();
+    }
+  }
+}
+
+extension LocalFileServiceExtensions on LocalFileService {
+  /// Devuelve la ruta completa del archivo cacheado (sin leerlo aún).
+  Future<File> getCacheFile(String name) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final cacheDir = Directory('${dir.path}/cache');
+    if (!await cacheDir.exists()) {
+      await cacheDir.create(recursive: true);
+    }
+    return File('${cacheDir.path}/$name');
   }
 }

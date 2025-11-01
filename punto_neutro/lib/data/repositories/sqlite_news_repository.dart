@@ -127,6 +127,14 @@ class SqliteNewsRepository {
           )
         ''');
 
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS bookmarks(
+            id INTEGER PRIMARY KEY,
+            created_at INTEGER NOT NULL,
+            pending_sync INTEGER NOT NULL DEFAULT 1
+          );
+        ''');
+
         // Índices para optimización
         await db.execute('CREATE INDEX idx_news_category ON news_items(category_id)');
         await db.execute('CREATE INDEX idx_comments_news ON comments(news_item_id)');
@@ -336,6 +344,50 @@ class SqliteNewsRepository {
     // Optimizar base de datos
     await db.execute('VACUUM');
     print('🧹 Base de datos SQLite optimizada');
+  }
+
+  // --- Bookmarks API local ---
+  Future<void> toggleBookmark(int newsId, {required bool value}) async {
+    final db = await database;
+    if (value) {
+      await db.insert(
+        'bookmarks',
+        {
+          'id': newsId,
+          'created_at': DateTime.now().millisecondsSinceEpoch,
+          'pending_sync': 1,
+        },
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+    } else {
+      await db.delete('bookmarks', where: 'id=?', whereArgs: [newsId]);
+    }
+  }
+
+  Future<bool> isBookmarked(int newsId) async {
+    final db = await database;
+    final rows = await db.query('bookmarks', columns: ['id'], where: 'id=?', whereArgs: [newsId], limit: 1);
+    return rows.isNotEmpty;
+  }
+
+  Future<List<int>> getBookmarkedIds() async {
+    final db = await database;
+    final rows = await db.query('bookmarks', orderBy: 'created_at DESC');
+    return rows.map((r) => (r['id'] as num).toInt()).toList();
+  }
+
+// --- Outbox para sync diferida ---
+  Future<List<int>> takePendingBookmarks(int limit) async {
+    final db = await database;
+    final rows = await db.query('bookmarks', where: 'pending_sync=1', orderBy: 'created_at ASC', limit: limit);
+    return rows.map((r) => (r['id'] as num).toInt()).toList();
+  }
+
+  Future<void> markBookmarksSynced(List<int> ids) async {
+    final db = await database;
+    if (ids.isEmpty) return;
+    final placeholders = List.filled(ids.length, '?').join(',');
+    await db.rawUpdate('UPDATE bookmarks SET pending_sync=0 WHERE id IN ($placeholders)', ids);
   }
 
   /// ✅ CERRAR CONEXIÓN

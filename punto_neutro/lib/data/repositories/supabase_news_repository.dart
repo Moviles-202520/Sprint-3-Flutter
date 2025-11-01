@@ -110,6 +110,21 @@ class SupabaseNewsRepository implements NewsRepository {
     }
   }
 
+  Future<void> pushBookmarks(List<int> newsIds, int userProfileId) async {
+    if (newsIds.isEmpty) return;
+    final rows = newsIds.map((id) => {'user_profile_id': userProfileId, 'news_item_id': id}).toList();
+    await _supabase.from('bookmarks').upsert(rows, onConflict: 'user_profile_id,news_item_id');
+  }
+
+  Future<void> deleteBookmark(int newsId, int userProfileId) async {
+    await _supabase.from('bookmarks').delete().match({'user_profile_id': userProfileId, 'news_item_id': newsId});
+  }
+
+  Future<Set<int>> fetchRemoteBookmarks(int userProfileId) async {
+    final data = await _supabase.from('bookmarks').select('news_item_id').eq('user_profile_id', userProfileId);
+    return {for (final r in data) (r['news_item_id'] as num).toInt()};
+  }
+  
   NewsItem _mapToNewsItem(Map<String, dynamic> response) {
   return NewsItem(
     news_item_id: (response['news_item_id']?.toString() ?? '0'), // ✅ CONVERTIR A STRING

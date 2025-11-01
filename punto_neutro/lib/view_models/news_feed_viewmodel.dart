@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../core/image_cache_service.dart';
 import '../domain/repositories/news_repository.dart';
 import '../domain/models/news_item.dart';
 
@@ -58,6 +59,47 @@ class NewsFeedViewModel extends ChangeNotifier {
       _filteredNewsItems = List.from(_allNewsItems);
     } else {
       _filteredNewsItems = _allNewsItems.where((item) => item.category_id == _selectedCategoryId).toList();
+    }
+  }
+
+  bool _prefetching = false;
+  DateTime _lastPrefetch = DateTime.fromMillisecondsSinceEpoch(0);
+  int _lastPrefetchedEnd = 0;
+
+  // Llamar cuando estés cerca del final del scroll
+  Future<void> prefetchTail({int batch = 16}) async {
+    if (_prefetching) return;
+    if (DateTime.now().difference(_lastPrefetch).inMilliseconds < 1200) return;
+
+    final list = _filteredNewsItems; // usa aquí el nombre real de tu lista
+    if (list.isEmpty) return;
+
+    final start = _lastPrefetchedEnd;
+    final end = (start + batch > list.length) ? list.length : start + batch;
+    if (start >= end) return;
+
+    final urls = <String>[];
+    for (var i = start; i < end; i++) {
+      final u = list[i].image_url; // ajusta si tu modelo usa otro nombre
+      if (u.isNotEmpty) urls.add(u);
+    }
+    if (urls.isEmpty) {
+      _lastPrefetchedEnd = end;
+      return;
+    }
+
+    _prefetching = true;
+    try {
+      await ImageCacheService.instance.prefetchUrls(
+        urls,
+        concurrency: 4,
+        maxBytesBudget: 50 * 1024 * 1024,
+        maxFilesBudget: 400,
+      );
+      _lastPrefetch = DateTime.now();
+      _lastPrefetchedEnd = end;
+    } finally {
+      _prefetching = false;
     }
   }
 }

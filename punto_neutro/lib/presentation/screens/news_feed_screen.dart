@@ -16,8 +16,7 @@ import '../../core/location_service.dart';
 import 'analytics_dashboard_screen.dart';
 
 class NewsFeedScreen extends StatefulWidget {
-  NewsFeedScreen({Key? key});
-
+  const NewsFeedScreen({super.key});
   @override
   State<NewsFeedScreen> createState() => _NewsFeedScreenState();
 }
@@ -27,6 +26,10 @@ class _NewsFeedScreenState extends State<NewsFeedScreen> {
 
   @override
   void dispose() {
+    _scrollCtrl.removeListener(_onScrollNearEnd);
+    _scrollCtrl.dispose();
+    super.dispose();
+
     // End session when leaving feed
     try {
       final vm = context.read<AuthViewModel>();
@@ -35,6 +38,32 @@ class _NewsFeedScreenState extends State<NewsFeedScreen> {
       }
     } catch (_) {}
     super.dispose();
+  }
+
+  // [ADD] dentro del _NewsFeedScreenState
+  final _scrollCtrl = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollCtrl.addListener(_onScrollNearEnd);
+  }
+
+// [ADD] dispara prefetch cuando falten ~800 px para el final
+  void _onScrollNearEnd() {
+    final pos = _scrollCtrl.position;
+    if (!pos.hasPixels || !pos.hasContentDimensions) return;
+
+    if (pos.pixels > (pos.maxScrollExtent - 800)) {
+      // Índice aproximado del primer ítem visible (ajusta 220 si tus cards son más grandes/pequeñas)
+      final firstVisibleApprox = (pos.pixels / 220).floor();
+
+      // Llama al VM sin alterar tu flujo actual
+      final vm = context.read<NewsFeedViewModel>();
+      vm.prefetchTail(
+        batch: 18, // próximas ~18 imágenes
+      );
+    }
   }
 
   @override
@@ -74,7 +103,17 @@ class _NewsFeedScreenState extends State<NewsFeedScreen> {
         return Scaffold(
           backgroundColor: Colors.black,
           appBar: _buildAppBar(context),
-          body: _buildBody(),
+          body: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              final metrics = notification.metrics;
+              if (metrics.pixels >= metrics.maxScrollExtent - 800) {
+                // 🔥 Llama al método de prefetch en tu ViewModel
+                context.read<NewsFeedViewModel>().prefetchTail(batch: 18);
+              }
+              return false; // No detiene el scroll normal
+            },
+            child: _buildBody(),
+          ),
         );
       }),
     );
@@ -213,6 +252,7 @@ class _NewsFeedScreenState extends State<NewsFeedScreen> {
       },
     );
   }
+
 }
 
 class _NewsItemCard extends StatelessWidget {

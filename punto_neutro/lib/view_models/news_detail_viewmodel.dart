@@ -7,8 +7,43 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/analytics_service.dart';
 import '../core/observers/rating_observer.dart';
 import '../core/observers/comment_tracker.dart';
+import 'package:flutter/foundation.dart';
+import '../../data/repositories/hybrid_news_repository.dart';
 
 class NewsDetailViewModel extends ChangeNotifier {
+
+  // ===== BOOKMARKS =====
+  final HybridNewsRepository _hybridNewsRepository;
+  bool isBookmarked = false;
+  bool _bookmarkLoaded = false;
+
+  /// Carga el estado de bookmark solo una vez
+  Future<void> loadBookmarkStateOnce() async {
+    if (_bookmarkLoaded) return;
+    final id = int.tryParse(news_item_id ?? news_item_id ?? ''); // ajusta si tu id tiene otro nombre
+    if (id == null) return;
+    try {
+      isBookmarked = await _hybridNewsRepository.isBookmarked(id);
+      _bookmarkLoaded = true;
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  /// Alterna el estado de bookmark y sincroniza vía repositorio híbrido
+  Future<void> toggleBookmark() async {
+    final id = int.tryParse(news_item_id ?? news_item_id ?? '');
+    if (id == null) return;
+    final next = !isBookmarked;
+    try {
+      await _hybridNewsRepository.toggleBookmark(id, value: next);
+      isBookmarked = next;
+      notifyListeners();
+    } catch (_) {
+      // Si falla, deja el estado igual
+    }
+  }
+
+
   // Lleva registro de eventos 'started' disparados por noticia y tipo
   bool _ratingStarted = false;
   bool _ratingCompleted = false;
@@ -32,7 +67,7 @@ class NewsDetailViewModel extends ChangeNotifier {
   // Shared controller for comment draft so overlays and inline input stay in sync
   final TextEditingController commentDraftController = TextEditingController();
 
-  NewsDetailViewModel(this._repository, this.news_item_id, this.userProfileId) {
+  NewsDetailViewModel(this._repository, this.news_item_id, this.userProfileId, this._hybridNewsRepository) {
     _loadData();
   }
 

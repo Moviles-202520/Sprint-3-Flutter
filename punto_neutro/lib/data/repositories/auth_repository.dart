@@ -2,6 +2,9 @@ import '../models/user_login.dart';
 
 abstract class AuthRepository {
   /// Crea usuario (mock local) y guarda refresh_token protegido por huella si fingerprintEnabled = true
+
+  Future<int?> currentUserProfileId();
+
   Future<UserLogin> register({
     required String email,
     required String password,

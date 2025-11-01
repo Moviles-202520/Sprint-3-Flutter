@@ -1,4 +1,8 @@
+import 'package:flutter/cupertino.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:punto_neutro/data/repositories/sqlite_news_repository.dart';
+import 'package:punto_neutro/data/repositories/supabase_auth_repository.dart';
+import 'package:punto_neutro/data/repositories/supabase_news_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'dart:async';
@@ -6,6 +10,7 @@ import '../../domain/repositories/news_repository.dart';
 import '../../domain/models/news_item.dart';
 import '../../domain/models/rating_item.dart';
 import '../../domain/models/comment.dart';
+import 'auth_repository.dart';
 
 class HybridNewsRepository implements NewsRepository {
   /// Obtiene la lista de noticias (cache-first)
@@ -51,7 +56,16 @@ class HybridNewsRepository implements NewsRepository {
   }
 
   /// Constructor: empezar a escuchar cambios de conectividad para sincronizar pendientes
-  HybridNewsRepository() {
+  HybridNewsRepository({
+    SqliteNewsRepository? sqlite,
+    SupabaseNewsRepository? remote,
+    AuthRepository? auth,
+  }) {
+    // Usa los que te pasen o crea/obtén los “default”
+    // Ajusta a los constructores reales de tus clases (instance / default ctor).
+    this.sqlite = sqlite ?? SqliteNewsRepository();            // o SqliteNewsRepository.instance
+    this.remote = remote ?? SupabaseNewsRepository();          // o SupabaseNewsRepository.instance
+    this.auth   = auth   ?? SupabaseAuthRepository();
     _connectivitySub = _connectivity.onConnectivityChanged.listen((result) async {
       final isConnected = result != ConnectivityResult.none;
       if (isConnected) {
@@ -340,6 +354,7 @@ class HybridNewsRepository implements NewsRepository {
     if (await _isConnected) {
       await _syncPendingRatings();
       await _syncPendingComments();
+      await syncBookmarksIfNeeded();
     }
   }
 
@@ -470,5 +485,70 @@ class HybridNewsRepository implements NewsRepository {
     total_ratings: (response['total_ratings'] as int?) ?? 0,
   );
 }
+
+
+  late final SqliteNewsRepository sqlite;
+  late final SupabaseNewsRepository remote;
+  late final AuthRepository auth;
+
+  Future<void> toggleBookmark(int newsId, {required bool value}) async {
+    await sqlite.toggleBookmark(newsId, value: value);
+
+    // Obtiene el perfil actual del usuario
+    final userProfileId = await auth.currentUserProfileId();
+
+    // Si hay usuario y conexión, intenta sincronizar de inmediato
+    if (userProfileId != null && await _isConnected) {
+      try {
+        if (value) {
+          await remote.pushBookmarks([newsId], userProfileId);
+          await sqlite.markBookmarksSynced([newsId]);
+          debugPrint('✅ Bookmark sincronizado remoto [$newsId]');
+        } else {
+          await remote.deleteBookmark(newsId, userProfileId);
+          debugPrint('🗑️ Bookmark eliminado remoto [$newsId]');
+        }
+      } catch (e) {
+        // Si falla, lo dejamos marcado como pendiente de sincronización
+        debugPrint('⚠️ Error al sincronizar bookmark [$newsId]: $e');
+      }
+    }
+  }
+
+  /// Verifica si una noticia está marcada como guardada
+  Future<bool> isBookmarked(int newsId) async {
+    return sqlite.isBookmarked(newsId);
+  }
+
+  /// Obtiene todos los IDs de noticias guardadas localmente
+  Future<List<int>> getBookmarkedIds() async {
+    return sqlite.getBookmarkedIds();
+  }
+
+  /// Sincroniza los bookmarks pendientes cuando vuelve la conexión
+  Future<void> syncBookmarksIfNeeded() async {
+    final userProfileId = await auth.currentUserProfileId();
+    if (userProfileId == null) return;
+
+    final connected = await _isConnected;
+    if (!connected) {
+      debugPrint('🌐 Sin conexión, posponiendo sincronización de bookmarks');
+      return;
+    }
+
+    final pending = await sqlite.takePendingBookmarks(100);
+    if (pending.isEmpty) {
+      debugPrint('🟢 No hay bookmarks pendientes');
+      return;
+    }
+
+    try {
+      await remote.pushBookmarks(pending, userProfileId);
+      await sqlite.markBookmarksSynced(pending);
+      debugPrint('✅ Bookmarks sincronizados con Supabase (${pending.length})');
+    } catch (e) {
+      debugPrint('⚠️ Fallo al sincronizar bookmarks pendientes: $e');
+    }
+  }
 
 }
