@@ -382,8 +382,8 @@ class _NewsDetailContent extends StatelessWidget {
                   if (value >= 0.98) return const SizedBox.shrink();
                   return Positioned.fill(
                     child: IgnorePointer(
-                      // block interactions with underlying widgets while dim is active
-                      ignoring: false,
+                      // Allow interactions to pass through to underlying widgets
+                      ignoring: true,
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
                         color: Colors.black.withOpacity(opacity),
