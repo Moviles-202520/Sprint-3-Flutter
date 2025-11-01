@@ -113,14 +113,16 @@ class AnalyticsDashboardViewModel extends ChangeNotifier {
 
       // Calcular promedios del usuario (solo reliability, bias no existe en Supabase)
       final userAvgReliability = userRatings
+          .where((r) => r['assigned_reliability_score'] != null)
           .map((r) => (r['assigned_reliability_score'] as num).toDouble())
-          .reduce((a, b) => a + b) / userRatings.length;
+          .fold(0.0, (a, b) => a + b) / userRatings.where((r) => r['assigned_reliability_score'] != null).length;
 
       // Calcular promedios de la comunidad
-      final communityAvgReliability = communityAvgs.isNotEmpty
-          ? communityAvgs
+      final validCommunityRatings = communityAvgs.where((r) => r['assigned_reliability_score'] != null).toList();
+      final communityAvgReliability = validCommunityRatings.isNotEmpty
+          ? validCommunityRatings
               .map((r) => (r['assigned_reliability_score'] as num).toDouble())
-              .reduce((a, b) => a + b) / communityAvgs.length
+              .reduce((a, b) => a + b) / validCommunityRatings.length
           : 0.0;
 
       _personalBiasData = {
@@ -161,7 +163,9 @@ class AnalyticsDashboardViewModel extends ChangeNotifier {
       
       for (final rating in ratingsWithSource) {
         final sourceName = rating['news_items']['author_institution'] as String? ?? 'Unknown';
-        final reliability = (rating['assigned_reliability_score'] as num).toDouble();
+        final reliabilityRaw = rating['assigned_reliability_score'];
+        if (reliabilityRaw == null) continue; // Skip nulls
+        final reliability = (reliabilityRaw as num).toDouble();
         
         sourceRatings.putIfAbsent(sourceName, () => []);
         sourceRatings[sourceName]!.add(reliability);
@@ -260,9 +264,13 @@ class AnalyticsDashboardViewModel extends ChangeNotifier {
       final Map<int, Map<String, dynamic>> categoryGroups = {};
       
       for (final rating in ratingsWithCategory) {
-        final categoryId = rating['news_items']['category_id'] as int;
-        final categoryName = rating['news_items']['categories']['name'] as String;
-        final reliability = (rating['assigned_reliability_score'] as num).toDouble();
+        final categoryId = rating['news_items']['category_id'] as int?;
+        if (categoryId == null) continue; // Skip nulls
+        
+        final categoryName = rating['news_items']['categories']['name'] as String? ?? 'Unknown';
+        final reliabilityRaw = rating['assigned_reliability_score'];
+        if (reliabilityRaw == null) continue; // Skip nulls
+        final reliability = (reliabilityRaw as num).toDouble();
         
         if (!categoryGroups.containsKey(categoryId)) {
           categoryGroups[categoryId] = {
@@ -326,8 +334,13 @@ class AnalyticsDashboardViewModel extends ChangeNotifier {
       // Agrupar ratings por usuario para calcular accuracy
       final Map<int, List<double>> userRatings = {};
       for (final rating in ratingData) {
-        final userId = rating['user_profile_id'] as int;
-        final reliability = (rating['assigned_reliability_score'] as num).toDouble();
+        final userId = rating['user_profile_id'] as int?;
+        if (userId == null) continue; // Skip nulls
+        
+        final reliabilityRaw = rating['assigned_reliability_score'];
+        if (reliabilityRaw == null) continue; // Skip nulls
+        final reliability = (reliabilityRaw as num).toDouble();
+        
         userRatings.putIfAbsent(userId, () => []);
         userRatings[userId]!.add(reliability);
       }
@@ -338,7 +351,8 @@ class AnalyticsDashboardViewModel extends ChangeNotifier {
       // Agrupar sesiones por usuario
       final Map<int, List<Map<String, dynamic>>> userSessions = {};
       for (final session in sessionData) {
-        final userId = session['user_profile_id'] as int;
+        final userId = session['user_profile_id'] as int?;
+        if (userId == null) continue; // Skip nulls
         userSessions.putIfAbsent(userId, () => []);
         userSessions[userId]!.add(session);
       }
@@ -350,7 +364,11 @@ class AnalyticsDashboardViewModel extends ChangeNotifier {
         if (userRatings.containsKey(userId) && userRatings[userId]!.isNotEmpty) {
           // Calcular engagement: suma de duration_seconds + articles_viewed
           final totalDuration = sessions
-              .map((s) => (s['duration_seconds'] as num).toDouble())
+              .map((s) {
+                final dur = s['duration_seconds'];
+                if (dur == null) return 0.0;
+                return (dur as num).toDouble();
+              })
               .reduce((a, b) => a + b);
           final totalArticles = sessions
               .map((s) => (s['articles_viewed'] as num?)?.toDouble() ?? 0)

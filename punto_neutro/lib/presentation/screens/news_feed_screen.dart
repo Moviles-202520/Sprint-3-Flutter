@@ -248,7 +248,7 @@ class _NewsFeedScreenState extends State<NewsFeedScreen> {
             // Prefetch cuando estamos cerca del final (últimas 3 noticias)
             final threshold = 3;
             if (index >= viewModel.newsItems.length - threshold) {
-              viewModel.prefetchNextImages(index, 5, context);
+              viewModel.prefetchTail(batch: 16);
             }
           },
           itemBuilder: (context, index) {
